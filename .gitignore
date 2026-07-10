@@ -1,0 +1,20 @@
+/*
+!/README.md
+!/start.sh
+!/stop.sh
+!/LICENSE
+!.gitignore
+
+# Rebuild abliteration files
+!/scripts
+/scripts/*
+!/scripts/compute_direction.py
+!/scripts/project_wob.py
+!/scripts/prompts.py
+!/scripts/hybrid_overlay.py
+
+# Docs (Hermes spill fix referenced in README)
+!/docs
+/docs/*
+!/docs/HERMES_SPILL_FIX.md
+!/docs/STATUS_FINETUNE.md
