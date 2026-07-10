@@ -94,9 +94,9 @@ def project(W: torch.Tensor, V: torch.Tensor, lam: float) -> torch.Tensor:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--src", type=Path, default=Path("/home/keyspark/models/dsv4-flash-dspark"))
-    ap.add_argument("--dst", type=Path, default=Path("/home/keyspark/models/dsv4-flash-dspark-abliterated"))
-    ap.add_argument("--direction", type=Path, default=Path("/home/keyspark/dsv4-ablit/work/refusal_direction.pt"))
+    ap.add_argument("--src", type=Path, default=Path("~/models/dsv4-flash-dspark").expanduser())
+    ap.add_argument("--dst", type=Path, default=Path("~/models/dsv4-flash-dspark-abliterated").expanduser())
+    ap.add_argument("--direction", type=Path, default=Path("~/dsv4-ablit/work/refusal_direction.pt").expanduser())
     ap.add_argument("--lambda-attn", type=float, default=3.5, help="lovesenko used 2.5; we push harder")
     ap.add_argument("--min-layer", type=int, default=0, help="first decoder layer to abliterate (inclusive)")
     ap.add_argument("--max-layer", type=int, default=42, help="last decoder layer to abliterate (inclusive)")

@@ -29,8 +29,8 @@ def load_stack(tag_dir: Path, n_layers: int = 43) -> dict[int, torch.Tensor]:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--work", type=Path, default=Path("/home/keyspark/dsv4-ablit/work"))
-    ap.add_argument("--out", type=Path, default=Path("/home/keyspark/dsv4-ablit/work/refusal_direction.pt"))
+    ap.add_argument("--work", type=Path, default=Path("~/dsv4-ablit/work").expanduser())
+    ap.add_argument("--out", type=Path, default=Path("~/dsv4-ablit/work/refusal_direction.pt").expanduser())
     ap.add_argument("--n-layers", type=int, default=43)
     ap.add_argument("--n-directions", type=int, default=4, help="SVD rank (lovesenko used 1)")
     args = ap.parse_args()

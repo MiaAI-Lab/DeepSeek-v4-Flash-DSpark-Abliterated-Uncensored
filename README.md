@@ -177,15 +177,15 @@ Each `layer_N.pt` is a tensor of shape `(n_prompts, hidden_dim)` containing the 
 
 ```bash
 python3 scripts/compute_direction.py \
-  --work /path/to/work \
-  --out /path/to/work/refusal_direction.pt \
+  --work ~/dsv4-ablit/work \
+  --out ~/dsv4-ablit/work/refusal_direction.pt \
   --n-layers 43 \
   --n-directions 4
 ```
 
 | Argument | Default | Description |
 |---|---|---|
-| `--work` | `/home/keyspark/dsv4-ablit/work` | Directory with `harmful/` and `harmless/` subdirectories |
+| `--work` | `~/dsv4-ablit/work` | Directory with `harmful/` and `harmless/` subdirectories |
 | `--out` | `<work>/refusal_direction.pt` | Output file containing direction vectors |
 | `--n-layers` | `43` | Number of decoder layers to expect |
 | `--n-directions` | `4` | SVD rank for multi-direction projection (1 = Lovesenko-style rank-1) |
@@ -204,7 +204,7 @@ The output `.pt` file contains:
 python3 scripts/project_wob.py \
   --src ~/models/dsv4-flash-dspark \
   --dst ~/models/dsv4-flash-dspark-abliterated \
-  --direction /path/to/work/refusal_direction.pt \
+  --direction ~/dsv4-ablit/work/refusal_direction.pt \
   --lambda-attn 3.5 \
   --min-layer 10 \
   --max-layer 42 \
@@ -213,9 +213,9 @@ python3 scripts/project_wob.py \
 
 | Argument | Default | Description |
 |---|---|---|
-| `--src` | `/home/keyspark/models/dsv4-flash-dspark` | Path to base model weights (safetensors) |
+| `--src` | `~/models/dsv4-flash-dspark` | Path to base model weights (safetensors) |
 | `--dst` | `<src>-abliterated` | Output directory for abliterated weights |
-| `--direction` | `/home/keyspark/dsv4-ablit/work/refusal_direction.pt` | Direction `.pt` file from step 2 |
+| `--direction` | `~/dsv4-ablit/work/refusal_direction.pt` | Direction `.pt` file from step 2 |
 | `--lambda-attn` | `3.5` | Projection strength (2.5 is Lovesenko; higher = stronger refusal removal) |
 | `--min-layer` | `0` | First decoder layer to abliterate (inclusive) |
 | `--max-layer` | `42` | Last decoder layer to abliterate (inclusive) |
