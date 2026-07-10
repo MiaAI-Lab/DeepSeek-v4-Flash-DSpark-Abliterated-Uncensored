@@ -14,12 +14,13 @@ Serves the abliterated (uncensored) build of DeepSeek-V4-Flash-DSpark across two
 
 ---
 
-> ## Prerequisites
-> **2× NVIDIA DGX Spark (GB10)** linked via InfiniBand/RoCE
-> **Docker** with GPU support on both machines
-> **`hf` CLI** ([install guide](https://huggingface.co/docs/huggingface_hub/en/guides/cli)) — logged in with `hf login`
-> **Passwordless SSH** from the master node to the worker node
-> **`rsync`** installed on both machines
+## Prerequisites
+
+- **2× NVIDIA DGX Spark (GB10)** linked via InfiniBand/RoCE
+- **Docker** with GPU support on both machines
+- **`hf` CLI** ([install guide](https://huggingface.co/docs/huggingface_hub/en/guides/cli)) — logged in with `hf login`
+- **Passwordless SSH** from the master node to the worker node
+- **`rsync`** installed on both machines
 
 ---
 
