@@ -60,7 +60,7 @@ All cluster settings live in `.env` at the repo root:
 | `HCA`         | `rocep1s0f1`  | InfiniBand HCA device name                           |
 | `IF`          | `enp1s0f1np1` | Network interface for NCCL/GLOO/TP sockets           |
 
-These values must match your physical network. The publish cluster used `10.100.10.x` — if deploying there, update accordingly.
+These values must match your physical network. Set `MASTER` and `WORKER_ADDR` to the actual IPs of your DGX Spark nodes.
 
 ---
 
