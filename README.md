@@ -2,16 +2,24 @@
 
 Serves the abliterated (uncensored) build of DeepSeek-V4-Flash-DSpark across two NVIDIA DGX Spark (GB10) nodes connected via InfiniBand/RoCE, using vLLM with DSpark speculative decoding, nvFP4 MLA KV-cache, and B12X MoE kernels.
 
+<p>
+<a href="https://x.com/MiaAI_lab" target="_blank">
+  <img src="https://img.shields.io/badge/Follow%20me%20on%20X-000000?style=for-the-badge&logo=x&logoColor=white" alt="Follow Mia on X" />
+</a>
+</p>
+<p>
+<a href='https://ko-fi.com/Z8Z3SPLOD' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi6.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
+</p>
+
+
 ---
 
-## Prerequisites
-
-- **2× NVIDIA DGX Spark (GB10)** linked via InfiniBand/RoCE
-- **Docker** with GPU support on both machines
-- **`hf` CLI** ([install guide](https://huggingface.co/docs/huggingface_hub/en/guides/cli)) — logged in with `hf login`
-- **Passwordless SSH** from the master node to the worker node
-- **`rsync`** installed on both machines
-- **`~/gpu-clear.sh`** on both nodes (optional — failure is non-fatal)
+> ## Prerequisites
+> **2× NVIDIA DGX Spark (GB10)** linked via InfiniBand/RoCE
+> **Docker** with GPU support on both machines
+> **`hf` CLI** ([install guide](https://huggingface.co/docs/huggingface_hub/en/guides/cli)) — logged in with `hf login`
+> **Passwordless SSH** from the master node to the worker node
+> **`rsync`** installed on both machines
 
 ---
 
@@ -43,13 +51,13 @@ To stop:
 
 All cluster settings live in `.env` at the repo root:
 
-| Variable | Example | Description |
-|---|---|---|
-| `MASTER` | `10.0.0.1` | IP of the master node (rank 0 — runs the API server) |
-| `WORKER_ADDR` | `10.0.0.2` | IP of the worker node (rank 1 — headless compute) |
-| `PORT` | `25000` | TCP port for vLLM multi-node control/store |
-| `HCA` | `rocep1s0f1` | InfiniBand HCA device name |
-| `IF` | `enp1s0f1np1` | Network interface for NCCL/GLOO/TP sockets |
+| Variable      | Example       | Description                                          |
+| ------------- | ------------- | ---------------------------------------------------- |
+| `MASTER`      | `10.0.0.1`    | IP of the master node (rank 0 — runs the API server) |
+| `WORKER_ADDR` | `10.0.0.2`    | IP of the worker node (rank 1 — headless compute)    |
+| `PORT`        | `25000`       | TCP port for vLLM multi-node control/store           |
+| `HCA`         | `rocep1s0f1`  | InfiniBand HCA device name                           |
+| `IF`          | `enp1s0f1np1` | Network interface for NCCL/GLOO/TP sockets           |
 
 These values must match your physical network. The publish cluster used `10.100.10.x` — if deploying there, update accordingly.
 
@@ -61,15 +69,15 @@ A single script that orchestrates the entire cluster from the master node. No ne
 
 ### What it does, step by step
 
-| Step | Action | Detail |
-|---|---|---|
-| **1** | Pull container image | `docker pull ghcr.io/drowzeys/vllm-dspark-nvfp4-stage-c:gb10` and tags it as `vllm-dspark-runtime:dspark-nvfp4-stage-c` |
-| **2** | Sync image to worker | Exports the image as a tar via `docker save` and pipes it through SSH to `docker load` on the worker — downloads once, uses on both |
-| **3** | Download model weights | Runs `hf download drowzeys/DeepSeek-V4-Flash-DSpark-Abliterated-Uncensored` to a local directory (`$MODELDIR`, default `~/models/dsv4-flash-dspark-abliterated`) |
-| **4** | Sync model to worker | Uses `rsync` to copy the model to the exact same path on the worker node |
-| **5** | Launch worker container | SSHes into the worker, clears GPU memory, starts the vLLM container in **rank 1** mode (`--headless` — compute only, no API) |
-| **6** | Launch master container | Clears GPU locally, starts the vLLM container in **rank 0** mode (API server on port 8888, full inference endpoint) |
-| **7** | Wait for readiness | Streams the container logs live to your terminal, then polls the `/health` endpoint silently. When the model responds, prints **"Model is ready!"** and returns control |
+| Step  | Action                  | Detail                                                                                                                                                                  |
+| ----- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | Pull container image    | `docker pull ghcr.io/drowzeys/vllm-dspark-nvfp4-stage-c:gb10` and tags it as `vllm-dspark-runtime:dspark-nvfp4-stage-c`                                                 |
+| **2** | Sync image to worker    | Exports the image as a tar via `docker save` and pipes it through SSH to `docker load` on the worker — downloads once, uses on both                                     |
+| **3** | Download model weights  | Runs `hf download drowzeys/DeepSeek-V4-Flash-DSpark-Abliterated-Uncensored` to a local directory (`$MODELDIR`, default `~/models/dsv4-flash-dspark-abliterated`)        |
+| **4** | Sync model to worker    | Uses `rsync` to copy the model to the exact same path on the worker node                                                                                                |
+| **5** | Launch worker container | SSHes into the worker, clears GPU memory, starts the vLLM container in **rank 1** mode (`--headless` — compute only, no API)                                            |
+| **6** | Launch master container | Clears GPU locally, starts the vLLM container in **rank 0** mode (API server on port 8888, full inference endpoint)                                                     |
+| **7** | Wait for readiness      | Streams the container logs live to your terminal, then polls the `/health` endpoint silently. When the model responds, prints **"Model is ready!"** and returns control |
 
 ### Multi-node coordination
 
@@ -82,10 +90,10 @@ vLLM distributes across the two nodes using a TCP store:
 
 ### Overridable environment variables
 
-| Variable | Default | Description |
-|---|---|---|
-| `MODELDIR` | `$HOME/models/dsv4-flash-dspark-abliterated` | Where to store/sync the model weights |
-| `SERVE_PORT` | `8888` | API port exposed on the master node |
+| Variable     | Default                                      | Description                           |
+| ------------ | -------------------------------------------- | ------------------------------------- |
+| `MODELDIR`   | `$HOME/models/dsv4-flash-dspark-abliterated` | Where to store/sync the model weights |
+| `SERVE_PORT` | `8888`                                       | API port exposed on the master node   |
 
 ---
 
@@ -118,12 +126,12 @@ python3 scripts/project_wob.py \
 
 The abliteration scripts:
 
-| Script | Purpose |
-|---|---|
-| `scripts/prompts.py` | Prompt battery used to elicit refusals from the base model |
+| Script                         | Purpose                                                      |
+| ------------------------------ | ------------------------------------------------------------ |
+| `scripts/prompts.py`           | Prompt battery used to elicit refusals from the base model   |
 | `scripts/compute_direction.py` | Computes the refusal direction vector from model activations |
-| `scripts/project_wob.py` | Projects the direction out of specific weight layers |
-| `scripts/hybrid_overlay.py` | Layer-range hybrid overlay tooling |
+| `scripts/project_wob.py`       | Projects the direction out of specific weight layers         |
+| `scripts/hybrid_overlay.py`    | Layer-range hybrid overlay tooling                           |
 
 The current weights use a hybrid layer-range strategy: layers 0–9 keep stock `attn.wo_b` (preserving chat/tools/protocol behaviour), layers 10–42 + MTP heads are abliterated, with SRA-cleaned rank-1 direction at λ=3.5.
 
