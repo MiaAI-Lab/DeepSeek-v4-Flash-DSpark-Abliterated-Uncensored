@@ -107,12 +107,13 @@ build_lc_script() {
   cat <<'LC' | sed "s|%RANK%|$rank|g; s|%HEADLESS%|$headless|g; s|%PORT%|$serve_port|g; s|%MASTER%|$master_addr|g; s|%MPORT%|$master_port|g"
 export PATH="/opt/env/bin:/opt/env/nvvm/bin:/opt/env/targets/sbsa-linux/nvvm/bin:${PATH:-}";
 export CUDA_HOME="${CUDA_HOME:-/opt/env/targets/sbsa-linux}";
+export CUDA_PATH="${CUDA_PATH:-${CUDA_HOME}}"; export CUDAToolkit_ROOT="${CUDAToolkit_ROOT:-${CUDA_HOME}}";
 export LD_LIBRARY_PATH="/opt/env/lib:/opt/env/targets/sbsa-linux/lib:${LD_LIBRARY_PATH:-}";
 exec /opt/env/bin/vllm serve /model --served-model-name deepseek-v4-flash-dspark \
   --host 0.0.0.0 --port %PORT% \
   --trust-remote-code --tensor-parallel-size 2 --pipeline-parallel-size 1 \
   --kv-cache-dtype nvfp4_ds_mla --block-size 256 \
-  --max-model-len 262144 --max-num-seqs 4 \
+  --max-model-len 1048576 --max-num-seqs 12 \
   --max-num-batched-tokens 8192 --gpu-memory-utilization 0.82 \
   --speculative-config "{\"method\":\"dspark\",\"num_speculative_tokens\":5}" \
   --tokenizer-mode deepseek_v4 --distributed-executor-backend mp \
@@ -125,6 +126,18 @@ LC
 
 LC_SCRIPT=$(build_lc_script 1 "--headless" "$SERVE_PORT" "$MASTER" "$PORT")
 LC_SCRIPT_MASTER=$(build_lc_script 0 "" "$SERVE_PORT" "$MASTER" "$PORT")
+
+# Memory check: ensure enough RAM before launch (95 GB recommended for 1M ctx)
+NEED_KB=$((95*1024*1024))
+for i in $(seq 1 90); do
+  avail=$(awk '/MemAvailable/{print $2}' /proc/meminfo)
+  [ "$avail" -ge "$NEED_KB" ] && break
+  sleep 2
+done
+[ "$avail" -lt "$NEED_KB" ] && { echo "ABORT: only $((avail/1048576))G RAM available, need 95G"; exit 1; }
+
+# Drop caches before launch
+sync; echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null 2>&1 || true
 
 # --- Launch worker (rank 1) on remote node ----------------------------------
 echo ""
@@ -161,6 +174,16 @@ docker run --gpus all -d --privileged --network host --ipc host --shm-size 64g \
   -e VLLM_ALLOW_LONG_MAX_MODEL_LEN=1 -e VLLM_TRITON_MLA_SPARSE=1 \
   -e VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0 -e VLLM_SKIP_INIT_MEMORY_CHECK=1 \
   -e VLLM_USE_B12X_MOE=1 -e VLLM_USE_B12X_WO_PROJECTION=1 \
+  -e VLLM_SPARSE_INDEXER_MAX_LOGITS_MB=256 \
+  -e VLLM_B12X_W4A16_FORCE_BLOCKS_PER_SM=0 -e VLLM_B12X_W4A16_FORCE_BLOCKS_MAX_M=16 \
+  -e "VLLM_B12X_W4A16_FORCE_TILE_CONFIG=" -e B12X_W4A16_TC_DECODE=0 \
+  -e VLLM_DSPARK_CONFIDENCE_THRESHOLD=0.0 -e VLLM_DSPARK_CONFIDENCE_SCHEDULER=off \
+  -e VLLM_DSPARK_LOCAL_ARGMAX=1 -e VLLM_DSPARK_REPLICATE_MARKOV_W1=1 \
+  -e VLLM_DSPARK_FUSED_MARKOV_ARGMAX=0 -e VLLM_DSPARK_GPU_REJECTED_CONTEXT_MASK=1 \
+  -e VLLM_DSPARK_REFERENCE_KV_QUANT_DEQUANT=0 -e VLLM_DSPARK_HARDWARE_SCHEDULER_EARLY_STOP=1 \
+  -e VLLM_DSV4_B12X_COMPRESSED_MLA=0 -e VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE=0 \
+  -e VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE_EXACT=0 \
+  -e DG_JIT_USE_NVRTC=0 -e DG_JIT_NVCC_COMPILER=/opt/env/bin/nvcc -e TILELANG_CLEANUP_TEMP_FILES=1 \
   -e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
   --entrypoint bash $IMG_DST \
   -lc $(printf '%q' "$LC_SCRIPT")
@@ -198,6 +221,16 @@ docker run --gpus all -d --privileged --network host --ipc host --shm-size 64g \
   -e VLLM_ALLOW_LONG_MAX_MODEL_LEN=1 -e VLLM_TRITON_MLA_SPARSE=1 \
   -e VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0 -e VLLM_SKIP_INIT_MEMORY_CHECK=1 \
   -e VLLM_USE_B12X_MOE=1 -e VLLM_USE_B12X_WO_PROJECTION=1 \
+  -e VLLM_SPARSE_INDEXER_MAX_LOGITS_MB=256 \
+  -e VLLM_B12X_W4A16_FORCE_BLOCKS_PER_SM=0 -e VLLM_B12X_W4A16_FORCE_BLOCKS_MAX_M=16 \
+  -e "VLLM_B12X_W4A16_FORCE_TILE_CONFIG=" -e B12X_W4A16_TC_DECODE=0 \
+  -e VLLM_DSPARK_CONFIDENCE_THRESHOLD=0.0 -e VLLM_DSPARK_CONFIDENCE_SCHEDULER=off \
+  -e VLLM_DSPARK_LOCAL_ARGMAX=1 -e VLLM_DSPARK_REPLICATE_MARKOV_W1=1 \
+  -e VLLM_DSPARK_FUSED_MARKOV_ARGMAX=0 -e VLLM_DSPARK_GPU_REJECTED_CONTEXT_MASK=1 \
+  -e VLLM_DSPARK_REFERENCE_KV_QUANT_DEQUANT=0 -e VLLM_DSPARK_HARDWARE_SCHEDULER_EARLY_STOP=1 \
+  -e VLLM_DSV4_B12X_COMPRESSED_MLA=0 -e VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE=0 \
+  -e VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE_EXACT=0 \
+  -e DG_JIT_USE_NVRTC=0 -e DG_JIT_NVCC_COMPILER=/opt/env/bin/nvcc -e TILELANG_CLEANUP_TEMP_FILES=1 \
   -e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
   --entrypoint bash "$IMG_DST" \
   -lc "$LC_SCRIPT_MASTER"

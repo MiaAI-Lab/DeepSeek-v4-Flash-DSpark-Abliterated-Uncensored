@@ -110,8 +110,8 @@ The vLLM engine runs with these settings inside the container:
 | Quantisation | `deepseek_v4_fp8` |
 | KV cache dtype | `nvfp4_ds_mla` |
 | KV cache pool | **1,199,047 tokens** (~18.53 GiB GPU memory) |
-| Context window (current) | **262,144 tokens** (`--max-model-len`) |
-| Concurrent sequences | **4** (`--max-num-seqs`) |
+| Context window | **1,048,576 tokens** (`--max-model-len`) |
+| Concurrent sequences | **12** (`--max-num-seqs`) |
 | Max batched tokens | **8,192** (`--max-num-batched-tokens`) |
 | GPU memory utilisation | **0.82** (`--gpu-memory-utilization`) |
 | Block size | **256** (`--block-size`) |
@@ -124,20 +124,6 @@ The vLLM engine runs with these settings inside the container:
 Overrides applied server-side (not configurable by the client):
 - `temperature: 0.0`, `top_p: 1.0`
 - `thinking: false` (`--default-chat-template-kwargs`)
-
-### Context vs concurrency trade-offs
-
-With a fixed KV cache pool of ~1.2M tokens, you can trade context length for concurrent users by changing `--max-model-len` and `--max-num-seqs` in `start.sh`'s `build_lc_script()`:
-
-| Context (`--max-model-len`) | Concurrent (`--max-num-seqs`) | Pool utilisation | Use case |
-|---|---|---|---|
-| **262,144** (current) | **4** | ~87% | Balanced: multi-user chat, tool calling |
-| **524,288** | **2** | ~87% | Long documents, code analysis |
-| **1,048,576** | **1** | ~87% | Full 1M context for a single session |
-
-The ~1.2M token pool is fixed by GPU memory (~18.53 GiB allocated). Doubling context halves available concurrency, and vice versa. Max concurrency at current settings is 4.57× before eviction kicks in.
-
----
 
 ## `stop.sh` — Cluster stop
 
