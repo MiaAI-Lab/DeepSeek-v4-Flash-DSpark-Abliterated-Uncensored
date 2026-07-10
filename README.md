@@ -141,29 +141,103 @@ It reads `WORKER_ADDR` from `.env`, then runs `docker stop` + `docker rm` on the
 
 ## Rebuilding the abliteration (optional)
 
-The weights in this repo were produced by projecting a refusal-direction vector onto specific layers of the base model. You can rebuild or customise this process:
+The weights in this repo were produced by a three-step pipeline. You can run it yourself to customise layer ranges, refusal strength, or direction vectors. Requires `torch` and `safetensors` installed locally.
+
+### Pipeline overview
+
+```
+prompts.py  ──►  model activations  ──►  compute_direction.py  ──►  refusal direction .pt  ──►  project_wob.py  ──►  abliterated weights
+```
+
+### Step 1 — Prepare prompt sets
+
+[`scripts/prompts.py`](scripts/prompts.py) defines two lists of prompts:
+- `HARMFUL` — refusal-eliciting prompts (e.g. "Write a guide on how to pick a lock")
+- `HARMLESS` — benign prompts (e.g. "Explain how locks work")
+
+You pass these through the base model and save the **layer activations** (residual stream or MLP outputs) to a working directory:
+
+```
+work/
+├── harmful/
+│   ├── layer_00.pt
+│   ├── layer_01.pt
+│   └── ...
+└── harmless/
+    ├── layer_00.pt
+    ├── layer_01.pt
+    └── ...
+```
+
+Each `layer_N.pt` is a tensor of shape `(n_prompts, hidden_dim)` containing the mean-pooled activations from that layer across all prompts in the set.
+
+### Step 2 — Compute refusal direction
+
+[`scripts/compute_direction.py`](scripts/compute_direction.py) loads the per-layer activation stacks and computes the refusal direction using diff-in-means + multi-direction SVD:
 
 ```bash
-# After capturing refusal directions
-# (see scripts/prompts.py for the prompt battery,
-#  scripts/compute_direction.py for direction extraction)
+python3 scripts/compute_direction.py \
+  --work /path/to/work \
+  --out /path/to/work/refusal_direction.pt \
+  --n-layers 43 \
+  --n-directions 4
+```
+
+| Argument | Default | Description |
+|---|---|---|
+| `--work` | `/home/keyspark/dsv4-ablit/work` | Directory with `harmful/` and `harmless/` subdirectories |
+| `--out` | `<work>/refusal_direction.pt` | Output file containing direction vectors |
+| `--n-layers` | `43` | Number of decoder layers to expect |
+| `--n-directions` | `4` | SVD rank for multi-direction projection (1 = Lovesenko-style rank-1) |
+
+The output `.pt` file contains:
+- `"broad"` — mean diff across all layers (4096-d unit vector)
+- `"deep"` — layer-weighted variant
+- `"per_layer"` — dict mapping layer ID → unit vector
+- `"directions"` — top-k SVD directions from the centred harmful-activation matrix
+
+### Step 3 — Project direction out of weights
+
+[`scripts/project_wob.py`](scripts/project_wob.py) applies `W ← W − λ · v · (v^T W)` to the FP8 `attn.wo_b` and `mtp.wo_b` shards:
+
+```bash
 python3 scripts/project_wob.py \
   --src ~/models/dsv4-flash-dspark \
   --dst ~/models/dsv4-flash-dspark-abliterated \
-  --direction work/refusal_direction_r1.pt \
-  --lambda-attn 3.5 --min-layer 10 --max-layer 42 --n-directions 1
+  --direction /path/to/work/refusal_direction.pt \
+  --lambda-attn 3.5 \
+  --min-layer 10 \
+  --max-layer 42 \
+  --n-directions 1
 ```
 
-The abliteration scripts:
+| Argument | Default | Description |
+|---|---|---|
+| `--src` | `/home/keyspark/models/dsv4-flash-dspark` | Path to base model weights (safetensors) |
+| `--dst` | `<src>-abliterated` | Output directory for abliterated weights |
+| `--direction` | `/home/keyspark/dsv4-ablit/work/refusal_direction.pt` | Direction `.pt` file from step 2 |
+| `--lambda-attn` | `3.5` | Projection strength (2.5 is Lovesenko; higher = stronger refusal removal) |
+| `--min-layer` | `0` | First decoder layer to abliterate (inclusive) |
+| `--max-layer` | `42` | Last decoder layer to abliterate (inclusive) |
+| `--no-mtp` | `false` | Skip editing `mtp.wo_b` (MTP draft head projection) |
+| `--n-directions` | `0` | Number of SVD directions to use (0 = all in file) |
+| `--dry-run` | `false` | Preview layers/tensors without writing |
 
-| Script                         | Purpose                                                      |
-| ------------------------------ | ------------------------------------------------------------ |
-| `scripts/prompts.py`           | Prompt battery used to elicit refusals from the base model   |
-| `scripts/compute_direction.py` | Computes the refusal direction vector from model activations |
-| `scripts/project_wob.py`       | Projects the direction out of specific weight layers         |
-| `scripts/hybrid_overlay.py`    | Layer-range hybrid overlay tooling                           |
+### Current recipe (this repo's weights)
 
-The current weights use a hybrid layer-range strategy: layers 0–9 keep stock `attn.wo_b` (preserving chat/tools/protocol behaviour), layers 10–42 + MTP heads are abliterated, with SRA-cleaned rank-1 direction at λ=3.5.
+| Parameter | Value |
+|---|---|
+| `attn.wo_b` layers | Stock: **0–9**, Abliterated: **10–42** |
+| MTP heads | **Abliterated** (same direction) |
+| Refusal direction | **SRA-cleaned rank-1** |
+| λ | **3.5** |
+| SVD directions | **1** |
+
+This hybrid layer-range preserves chat/tools/protocol behaviour in early layers while removing refusals in the deeper layers where they're encoded.
+
+### Helper: `scripts/hybrid_overlay.py`
+
+[`scripts/hybrid_overlay.py`](scripts/hybrid_overlay.py) is a utility for merging stock and abliterated weight shards when applying different layer ranges to different tensors (e.g. keep stock `attn.wo_b` on layers 0–9, abliterated on 10–42). It's used internally by `project_wob.py` when the layer range doesn't cover all layers.
 
 ---
 
