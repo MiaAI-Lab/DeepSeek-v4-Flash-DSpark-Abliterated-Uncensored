@@ -63,9 +63,13 @@ docker tag "$IMG_SRC" "$IMG_DST"
 # Step 2 – Sync docker image to worker (save → pipe → load)
 # =============================================================================
 echo ""
-echo "[2/4] Syncing docker image to worker ($WORKER_ADDR)..."
-docker save "$IMG_SRC" | ssh -o StrictHostKeyChecking=accept-new "$WORKER_ADDR" \
-  "docker load && docker tag $IMG_SRC $IMG_DST"
+if ssh -o StrictHostKeyChecking=accept-new "$WORKER_ADDR" "docker image inspect $IMG_DST >/dev/null 2>&1"; then
+  echo "[2/4] Docker image already on worker, skipping sync"
+else
+  echo "[2/4] Syncing docker image to worker ($WORKER_ADDR)..."
+  docker save "$IMG_SRC" | ssh -o StrictHostKeyChecking=accept-new "$WORKER_ADDR" \
+    "docker load && docker tag $IMG_SRC $IMG_DST"
+fi
 
 # =============================================================================
 # Step 3 – Download model
