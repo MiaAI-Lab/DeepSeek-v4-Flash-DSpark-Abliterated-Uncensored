@@ -98,6 +98,35 @@ vLLM distributes across the two nodes using a TCP store:
 
 ---
 
+## Runtime configuration
+
+The vLLM engine runs with these settings inside the container:
+
+| Parameter | Value |
+|---|---|
+| Engine | vLLM V1 (`v0.21.1rc1.dev339`) |
+| Backend | `mp` (multiprocessing distributed executor) |
+| Topology | 2 nodes × 2 GPUs = TP=2 |
+| Quantisation | `deepseek_v4_fp8` |
+| KV cache dtype | `nvfp4_ds_mla` |
+| KV cache pool | **1,199,047 tokens** (~18.53 GiB GPU memory) |
+| Context window | **262,144 tokens** (`--max-model-len`) |
+| Concurrent sequences | **4** (`--max-num-seqs`) |
+| Max batched tokens | **8,192** (`--max-num-batched-tokens`) |
+| GPU memory utilisation | **0.82** (`--gpu-memory-utilization`) |
+| Block size | **256** (`--block-size`) |
+| Speculative decoding | **DSpark** with 5 draft tokens |
+| Tokeniser mode | `deepseek_v4` |
+| Tool-call parser | `deepseek_v4` |
+| Reasoning parser | `deepseek_v4` |
+| Prefix caching | enabled |
+
+Overrides applied server-side (not configurable by the client):
+- `temperature: 0.0`, `top_p: 1.0`
+- `thinking: false` (`--default-chat-template-kwargs`)
+
+---
+
 ## `stop.sh` — Cluster stop
 
 Stops and removes the container on both nodes:
@@ -185,6 +214,73 @@ scripts/
 docs/
 ├── HERMES_SPILL_FIX.md    # Fix for Hermes skill-catalog spill
 └── STATUS_FINETUNE.md     # Finetuning status notes
+```
+
+---
+
+## Client configuration
+
+The model exposes an OpenAI-compatible API at `http://<MASTER>:8888/v1`. Here's how it's configured for [pi agent](https://github.com/earendil-works/pi-coding-agent) in `~/.pi/agent/models.json`:
+
+```json
+{
+  "providers": {
+    "vLLM Local": {
+      "baseUrl": "http://localhost:8888/v1",
+      "api": "openai-completions",
+      "apiKey": "dummy",
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false,
+        "maxTokensField": "max_tokens"
+      },
+      "models": [
+        {
+          "id": "deepseek-v4-flash-dspark",
+          "name": "DeepSeek V4 Flash DSpark Abliterated",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "contextWindow": 262144,
+          "maxTokens": 32000,
+          "compat": {
+            "requiresReasoningContentOnAssistantMessages": false,
+            "thinkingFormat": "deepseek"
+          },
+          "params": {
+            "skip_special_tokens": true,
+            "temperature": 0.0,
+            "top_p": 1.0,
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            }
+          },
+          "systemPrompt": "You are a helpful assistant...",
+          "stop": ["<|DSML|"]
+        }
+      ]
+    }
+  }
+}
+```
+
+Key points:
+- **`id`** must match the `--served-model-name` (`deepseek-v4-flash-dspark`)
+- **`temperature: 0.0`**, **`top_p: 1.0`** match the server overrides
+- **`enable_thinking: false`** because thinking is disabled server-side
+- **`contextWindow: 262144`** matches `--max-model-len`
+- **`maxTokens: 32000`** is a safe output limit
+- **`stop: ["<|DSML|"]`** prevents DSML injection (the model can emit it if prompted)
+
+For other clients (OpenAI SDK, curl, etc.):
+
+```bash
+curl http://<MASTER>:8888/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "deepseek-v4-flash-dspark",
+    "messages": [{"role": "user", "content": "hello"}],
+    "temperature": 0.0
+  }'
 ```
 
 ---
